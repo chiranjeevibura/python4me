@@ -1,0 +1,56 @@
+import cx_Oracle
+from pymongo import MongoClient
+
+# Oracle 1 connection details
+oracle1_user = "YOUR_ORACLE1_USER"
+oracle1_password = "YOUR_ORACLE1_PASSWORD"
+oracle1_dsn = "YOUR_ORACLE1_DSN"
+oracle1_table = "YOUR_ORACLE1_TABLE"
+
+# Oracle 2 connection details
+oracle2_user = "YOUR_ORACLE2_USER"
+oracle2_password = "YOUR_ORACLE2_PASSWORD"
+oracle2_dsn = "YOUR_ORACLE2_DSN"
+oracle2_table = "YOUR_ORACLE2_TABLE"
+
+# MongoDB connection details
+mongo_uri = "mongodb://YOUR_MONGO_HOST:YOUR_MONGO_PORT"
+mongo_database = "YOUR_MONGO_DATABASE"
+mongo_collection = "YOUR_MONGO_COLLECTION"
+
+# Connect to Oracle 1
+conn_oracle1 = cx_Oracle.connect(user=oracle1_user, password=oracle1_password, dsn=oracle1_dsn)
+cursor_oracle1 = conn_oracle1.cursor()
+cursor_oracle1.execute(f"SELECT * FROM {oracle1_table}")
+
+# Connect to Oracle 2
+conn_oracle2 = cx_Oracle.connect(user=oracle2_user, password=oracle2_password, dsn=oracle2_dsn)
+cursor_oracle2 = conn_oracle2.cursor()
+cursor_oracle2.execute(f"SELECT * FROM {oracle2_table}")
+
+# Combine or join the data
+data_combined = {}
+for row in cursor_oracle1:
+    data_combined[row[0]] = row[1:]
+
+for row in cursor_oracle2:
+    if row[0] in data_combined:
+        data_combined[row[0]].extend(row[1:])
+    else:
+        data_combined[row[0]] = [None] * (len(cursor_oracle1.description) - 1) + list(row[1:])
+
+# Insert data into MongoDB
+client_mongo = MongoClient(mongo_uri)
+db_mongo = client_mongo[mongo_database]
+collection_mongo = db_mongo[mongo_collection]
+
+for key, value in data_combined.items():
+    data = dict(zip([desc[0] for desc in cursor_oracle1.description], [key] + value))
+    collection_mongo.insert_one(data)
+
+# Close connections
+cursor_oracle1.close()
+cursor_oracle2.close()
+conn_oracle1.close()
+conn_oracle2.close()
+client_mongo.close()
