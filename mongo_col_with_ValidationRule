@@ -1,0 +1,88 @@
+import cx_Oracle
+from pymongo import MongoClient
+
+# Oracle and MongoDB connection details
+oracle_user = "YOUR_ORACLE_USER"
+oracle_password = "YOUR_ORACLE_PASSWORD"
+oracle_dsn = "YOUR_ORACLE_DSN"
+
+mongo_uri = "mongodb://YOUR_MONGO_HOST:YOUR_MONGO_PORT"
+mongo_database = "YOUR_MONGO_DATABASE"
+mongo_collection = "YOUR_MONGO_COLLECTION"
+
+# Connect to Oracle database
+conn_oracle = cx_Oracle.connect(user=oracle_user, password=oracle_password, dsn=oracle_dsn)
+
+# Connect to MongoDB
+client_mongo = MongoClient(mongo_uri)
+db_mongo = client_mongo[mongo_database]
+collection_mongo = db_mongo[mongo_collection]
+
+# Define mapping of Oracle column names to MongoDB field names
+mapping = {
+    "EMPLOYEE_ID": "employeeId",
+    "FIRST_NAME": "firstName",
+    "LAST_NAME": "lastName",
+    "DATE_OF_BIRTH": "dateOfBirth",
+    "GENDER": "gender",
+    "SPOUSE_NAME": "spouseName",
+    "SPOUSE_DATE_OF_BIRTH": "spouseDateOfBirth",
+    "KID1": "kid1",
+    "KID2": "kid2",
+    "KID3": "kid3"
+}
+
+# Define schema validation rules for MongoDB collection
+schema_validation = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["employeeId", "firstName", "lastName", "dateOfBirth", "gender", "family"],
+        "properties": {
+            "employeeId": {"bsonType": "int"},
+            "firstName": {"bsonType": "string"},
+            "lastName": {"bsonType": "string"},
+            "dateOfBirth": {"bsonType": "date"},
+            "gender": {"bsonType": "string", "enum": ["Male", "Female", "Other"]},
+            "family": {
+                "bsonType": "object",
+                "required": ["spouseName", "spouseDateOfBirth"],
+                "properties": {
+                    "spouseName": {"bsonType": "string"},
+                    "spouseDateOfBirth": {"bsonType": "date"},
+                    "kidsNames": {"bsonType": "array", "items": {"bsonType": "string"}}
+                }
+            }
+        }
+    }
+}
+
+# Create the MongoDB collection with schema validation
+collection_mongo.create_collection(mongo_collection, validator=schema_validation)
+
+# Read data from Oracle Employee and Employee Family tables
+cursor_oracle = conn_oracle.cursor()
+cursor_oracle.execute("SELECT * FROM EMPLOYEE INNER JOIN EMPLOYEE_FAMILY ON EMPLOYEE.EMPLOYEE_ID = EMPLOYEE_FAMILY.EMPLOYEE_ID")
+
+# Transform and insert data into MongoDB collection
+for row in cursor_oracle:
+    # Transform the data according to the validation schema
+    transformed_data = {
+        "employeeId": row[0],
+        "firstName": row[1],
+        "lastName": row[2],
+        "dateOfBirth": row[3].strftime("%Y-%m-%d"),
+        "gender": row[4],
+        "family": {
+            "spouseName": row[5],
+            "spouseDateOfBirth": row[6].strftime("%Y-%m-%d"),
+            "kidsNames": [kid for kid in row[7:] if kid]
+        }
+    }
+    
+    # Insert the transformed data into the MongoDB collection
+    collection_mongo.insert_one(transformed_data)
+
+# Close connections
+cursor_oracle.close()
+conn_oracle.close()
+client_mongo.close()
