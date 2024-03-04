@@ -1,0 +1,61 @@
+import cx_Oracle
+from pymongo import MongoClient
+
+# Oracle connection details
+oracle_user = "YOUR_ORACLE_USER"
+oracle_password = "YOUR_ORACLE_PASSWORD"
+oracle_dsn = "YOUR_ORACLE_DSN"
+
+# MongoDB connection details
+mongo_uri = "mongodb://YOUR_MONGO_HOST:YOUR_MONGO_PORT"
+mongo_database = "YOUR_MONGO_DATABASE"
+mongo_collection = "YOUR_MONGO_COLLECTION"
+
+# Connect to Oracle database
+conn_oracle = cx_Oracle.connect(user=oracle_user, password=oracle_password, dsn=oracle_dsn)
+cursor_oracle = conn_oracle.cursor()
+
+# Connect to MongoDB
+client_mongo = MongoClient(mongo_uri)
+db_mongo = client_mongo[mongo_database]
+collection_mongo = db_mongo[mongo_collection]
+
+# Execute SQL query to fetch data
+sql_query = """
+SELECT e.employee_id, e.first_name, e.last_name, e.date_of_birth, e.gender,
+       ef.spouse_name, ef.spouse_date_of_birth, ef.kids_names
+FROM EMPLOYEE e
+LEFT JOIN EMPLOYEE_FAMILY ef ON e.employee_id = ef.employee_id
+"""
+cursor_oracle.execute(sql_query)
+
+# Define mapping from Oracle columns to MongoDB fields
+mapping = {
+    "EMPLOYEE_ID": "employeeId",
+    "FIRST_NAME": "firstName",
+    "LAST_NAME": "lastName",
+    "DATE_OF_BIRTH": "dateOfBirth",
+    "GENDER": "gender",
+    "SPOUSE_NAME": "family.spouseName",
+    "SPOUSE_DATE_OF_BIRTH": "family.spouseDateOfBirth",
+    "KIDS_NAMES": "family.kidsNames"
+}
+
+# Transform and insert data into MongoDB
+for row in cursor_oracle:
+    record = {}
+    for i, col_name in enumerate(cursor_oracle.description):
+        key = mapping.get(col_name[0].upper(), col_name[0].lower())
+        if key.startswith('family'):
+            record[key.split('.')[0]] = record.get(key.split('.')[0], {})
+            record[key.split('.')[0]][key.split('.')[1]] = row[i]
+        else:
+            record[key] = row[i]
+    collection_mongo.insert_one(record)
+
+# Close Oracle cursor and connection
+cursor_oracle.close()
+conn_oracle.close()
+
+# Close MongoDB connection
+client_mongo.close()
