@@ -1,0 +1,112 @@
+Certainly! Below is a complete Python program that:
+
+1. Creates a MongoDB collection with validation rules.
+2. Reads data from an Oracle table.
+3. Transforms the data and prepares it according to the validation rules.
+4. Inserts the transformed data into the MongoDB collection.
+
+Make sure to fill in the placeholders (`YOUR_*`) with your actual MongoDB connection information and your Oracle table name.
+
+```python
+from pymongo import MongoClient
+from pymongo.errors import OperationFailure
+import cx_Oracle
+import datetime
+
+# Define the MongoDB connection information
+mongo_uri = "mongodb://YOUR_MONGO_HOST:YOUR_MONGO_PORT"
+mongo_database = "YOUR_MONGO_DATABASE"
+mongo_collection = "YOUR_MONGO_COLLECTION"
+
+# Define the Oracle connection information
+oracle_user = "YOUR_ORACLE_USER"
+oracle_password = "YOUR_ORACLE_PASSWORD"
+oracle_dsn = "YOUR_ORACLE_DSN"
+oracle_table = "YOUR_ORACLE_TABLE"
+
+# Define the validation schema for the MongoDB collection
+validation_schema = {
+    "$jsonSchema": {
+        "bsonType": "object",
+        "required": ["employeeId", "firstName", "lastName", "dateOfBirth", "gender", "family"],
+        "properties": {
+            "employeeId": {"bsonType": "int", "description": "The unique identifier for an employee"},
+            "firstName": {"bsonType": "string", "description": "The first name of the employee"},
+            "lastName": {"bsonType": "string", "description": "The last name of the employee"},
+            "dateOfBirth": {"bsonType": "string", "description": "The date of birth of the employee"},
+            "gender": {"bsonType": "string", "description": "The gender of the employee"},
+            "family": {
+                "bsonType": "object",
+                "required": ["spouseName", "spouseDateOfBirth", "kidsNames"],
+                "properties": {
+                    "spouseName": {"bsonType": "string", "description": "The name of the spouse"},
+                    "spouseDateOfBirth": {"bsonType": "string", "description": "The date of birth of the spouse"},
+                    "kidsNames": {
+                        "bsonType": "array",
+                        "description": "The names of the kids",
+                        "items": {"bsonType": "string"}
+                    }
+                }
+            }
+        }
+    }
+}
+
+# Create a MongoDB client
+client = MongoClient(mongo_uri)
+
+# Create a database
+db = client[mongo_database]
+
+# Create a collection with validation rules
+try:
+    db.create_collection(mongo_collection, validator=validation_schema)
+    print(f"Collection '{mongo_collection}' created with validation rules.")
+except OperationFailure as e:
+    print(f"Error creating collection: {e.details}")
+
+# Connect to the Oracle database
+conn_oracle = cx_Oracle.connect(user=oracle_user, password=oracle_password, dsn=oracle_dsn)
+
+# Create a cursor to execute SQL queries
+cursor_oracle = conn_oracle.cursor()
+
+# Execute a SQL query to fetch data from the Oracle table
+cursor_oracle.execute(f"SELECT * FROM {oracle_table}")
+
+# Read the data from the cursor
+for row in cursor_oracle:
+    # Transform the data according to the validation schema
+    transformed_data = {
+        "employeeId": row[0],
+        "firstName": row[1],
+        "lastName": row[2],
+        "dateOfBirth": row[3].strftime("%Y-%m-%d"),
+        "gender": row[4],
+        "family": {
+            "spouseName": row[5],
+            "spouseDateOfBirth": row[6].strftime("%Y-%m-%d"),
+            "kidsNames": [kid.strip() for kid in row[7].split(',')] if row[7] else []
+        }
+    }
+
+    # Insert the transformed data into the MongoDB collection
+    db[mongo_collection].insert_one(transformed_data)
+
+# Close the cursor and database connections
+cursor_oracle.close()
+conn_oracle.close()
+client.close()
+```
+
+Please note that the above program does not handle cases where the schema or data from the Oracle table might be incompatible with the MongoDB validation schema. Ensure that the data types and formats are compatible, or you may need to preprocess or modify the data before insertion.
+
+Additionally, this program uses the `cx_Oracle` library to connect to Oracle and `pymongo` to connect to MongoDB. Make sure to install these libraries before running the program. You can install them using pip:
+
+```bash
+pip install cx-Oracle pymongo
+```
+
+Replace `YOUR_MONGO_HOST`, `YOUR_MONGO_PORT`, `YOUR_MONGO_DATABASE`, `YOUR_MONGO_COLLECTION`, `YOUR_ORACLE_USER`, `YOUR_ORACLE_PASSWORD`, `YOUR_ORACLE_DSN`, and `YOUR_ORACLE_TABLE` with your actual MongoDB and Oracle connection details and Oracle table name.
+
+This program will insert the data from the Oracle table into the MongoDB collection while ensuring that the inserted documents conform to the specified validation rules. If a document violates the rules, the insertion operation will fail.
