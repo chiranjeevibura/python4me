@@ -3,3 +3,25 @@ public class HelloWorld {
         System.out.println("Hello, World!");
     }
 }
+
+
+import subprocess
+
+def call_java_program():
+    try:
+        # Compile the Java program
+        subprocess.run(["javac", "HelloWorld.java"])
+
+        # Execute the compiled Java program
+        result = subprocess.run(["java", "HelloWorld"], capture_output=True, text=True)
+
+        # Check if the execution was successful
+        if result.returncode == 0:
+            return result.stdout.strip()  # Return the output
+        else:
+            return "Error: Java program execution failed."
+    except Exception as e:
+        return f"Error: {e}"
+
+# Call the Java program and print the result
+print(call_java_program())
