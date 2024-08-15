@@ -41,3 +41,27 @@ Function Definition: The get_document_counts function takes the start and end da
 Oracle Query: Constructs a SQL query to count documents within the specified date range in the Oracle database. Uses pandas.read_sql to execute the query and extract the count.
 MongoDB Query: Constructs a MongoDB aggregation pipeline to count documents within the specified date range. Uses PySpark's MongoDB connector to execute the query and extract the count.
 Return Values: Returns the source_count and target_count as a tuple.
+
+
+
+Key Steps:
+
+Data Ingestion: Fetch batch information, extract data from Oracle and MongoDB.
+Data Comparison: Compare key columns to identify discrepancies.
+Document Validation: Randomly sample documents and validate on HCP.
+Reconciliation Update: Update reconciliation status with metrics.
+Key Metrics:
+
+Total records processed
+Match rate
+Mismatch rate
+Validation success rate
+Average reconciliation time
+
+
+Crafting a Strong Summary Statement
+Summarize the overall goal: Reconcile data between Oracle and MongoDB, ensuring data consistency and integrity.
+Highlight key achievements: Successfully implemented a process to compare key columns, validate data in HCP, and update reconciliation status efficiently.
+Quantify impact: If possible, include metrics or results to demonstrate the value of the process.
+
+"This reconciliation process effectively compares and validates millions of documents between Oracle and MongoDB, ensuring data consistency and integrity. By leveraging PySpark and HCP integration, we aim to optimize performance and accuracy in identifying discrepancies."
