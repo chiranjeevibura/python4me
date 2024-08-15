@@ -1,0 +1,43 @@
+Title: Reconciliation Process Overview
+Step-by-Step Breakdown:
+Read batch information: Fetch BATCHID, BATCH_START_DATE, and BATCH_END_DATE from the Oracle batch table.
+Query source Oracle database: Retrieve document count within the specified date range.
+Query target MongoDB database: Retrieve document count within the specified date range.
+Compare key columns: Compare DOMAIN, DIVISION, SUBDIVISION, CUSTREFKEY, CUSTREFValue, and EXTREFKEY, EXTREFValue between source and target data.
+Document validation: Randomly sample documents and validate their existence in Hitachi Content Platform.
+Update reconciliation status: Update SparkReconBatchTable with counts, comparison results, and validation results.
+
+Understanding the Task
+We aim to compare specific columns in two PySpark DataFrames: source_df and target_df. The goal is to identify discrepancies between these columns.
+
+Explanation
+Create DataFrames: We create sample DataFrames source_df and target_df with the specified columns.
+Full Outer Join: We perform a full outer join on the comparison columns. This will include all records from both DataFrames, with null values for columns that don't match.
+Identify Mismatches: We filter the joined DataFrame based on mismatched id columns. This indicates records that exist in one DataFrame but not the other, or where the values for the comparison columns differ.
+
+comparison_df = source_df.join(target_df, ["DOMAIN", "DIVISION", "CUSTREFKEY", "CUSTREFValue", "EXTREFKEY", "EXTREFValue"], how="full_outer")
+
+# Identify records that exist in one DataFrame but not the other
+mismatch_count = comparison_df.filter((comparison_df["id"] != comparison_df["id"])).count()
+print("Mismatch count:", mismatch_count)
+
+# Further analysis can be done based on the comparison_df
+
+We aim to randomly sample documents from a PySpark DataFrame, extract a relevant field (e.g., HCP storage path), and validate the existence of the corresponding document in the Hitachi Content Platform (HCP).
+
+Explanation
+Create Sample DataFrame: We create a sample DataFrame with columns id, document_name, and HCP_storage_path.
+Random Sampling: We randomly sample 10% of the DataFrame using sample.
+Extract HCP Paths: We extract the HCP_storage_path column into a Python list.
+Validate Documents: Iterate over the HCP paths, calling validate_document for each path.
+Return Results: Return a list of tuples containing the HCP path and validation status.
+
+
+Understanding the Task
+We aim to retrieve document counts within a specified date range from both an Oracle database and a MongoDB collection.
+
+Explanation
+Function Definition: The get_document_counts function takes the start and end dates as input and returns a tuple containing the source and target counts.
+Oracle Query: Constructs a SQL query to count documents within the specified date range in the Oracle database. Uses pandas.read_sql to execute the query and extract the count.
+MongoDB Query: Constructs a MongoDB aggregation pipeline to count documents within the specified date range. Uses PySpark's MongoDB connector to execute the query and extract the count.
+Return Values: Returns the source_count and target_count as a tuple.
