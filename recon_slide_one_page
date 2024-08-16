@@ -215,3 +215,70 @@ BATCH_END_DATE
 Query Oracle DB 
 
 BATCH TABLE
+
+
+
+
+from pyspark.sql import functions as F
+from pyspark.sql.types import StringType
+
+# Define a UDF to convert BSON UUID to string format
+def bson_to_str_uuid(bson_uuid):
+    return str(bson_uuid)
+
+# Register the UDF
+bson_to_str_uuid_udf = F.udf(bson_to_str_uuid, StringType())
+
+# Source DataFrame: Assume Object_ID is already in string format
+source_selected_df = source_df.select(
+    F.col("Object_ID").alias("source_uuid"),
+    F.col("DOMAIN"),
+    F.col("DIVISION"),
+    F.col("SUBDIVISION")
+)
+
+# Target DataFrame: Convert BSON UUID to string and select the relevant columns
+target_selected_df = target_df.select(
+    bson_to_str_uuid_udf(F.col("documentOS.documentOsGuid")).alias("target_uuid"),
+    F.col("bankDocument.tenants.DOMAIN").alias("DOMAIN"),
+    F.col("bankDocument.tenants.DIVISION").alias("DIVISION"),
+    F.col("bankDocument.tenants.SUBDIVISION").alias("SUBDIVISION")
+)
+
+# Join DataFrames on UUID
+comparison_df = source_selected_df.join(
+    target_selected_df,
+    on=F.col("source_uuid") == F.col("target_uuid"),
+    how="inner"
+)
+
+# Check for mismatches in the selected columns
+mismatch_conditions = [
+    F.col(f"source.{col}") != F.col(f"target.{col}")
+    for col in ["DOMAIN", "DIVISION", "SUBDIVISION"]
+]
+
+# Create a column to record mismatches
+mismatch_df = comparison_df.withColumn(
+    "mismatch_columns",
+    F.expr("array(" + ", ".join([f"case when {cond} then '{col}' end" for cond, col in zip(mismatch_conditions, ["DOMAIN", "DIVISION", "SUBDIVISION"])]) + ")")
+)
+
+# Filter for mismatches
+mismatch_df = mismatch_df.filter(F.size(F.col("mismatch_columns")) > 0)
+
+# Reconciliation result
+reconcile_check = "MATCHED" if mismatch_df.count() == 0 else "MISMATCHED"
+
+# Log the result
+logger.info(f"Data comparison result for BATCHID={batch['BATCHID']}: {reconcile_check}")
+
+# Update the reconciliation status in the batch table
+update_query = f"""
+    UPDATE SparkReconBatchTable 
+    SET RECONCILE_CHECK = '{reconcile_check}' 
+    WHERE BATCHID = '{batch['BATCHID']}'
+"""
+cursor.execute(update_query)
+conn.commit()
+
