@@ -282,3 +282,20 @@ update_query = f"""
 cursor.execute(update_query)
 conn.commit()
 
+----------
+
+# Define mismatch columns using PySpark functions
+mismatch_domain = F.when(F.col("source.DATABASE") != F.col("target.DATABASE"), F.lit("DOMAIN")).otherwise(F.lit(None))
+mismatch_division = F.when(F.col("source.DIVISION") != F.col("target.DIVISION"), F.lit("DIVISION")).otherwise(F.lit(None))
+mismatch_subdivision = F.when(F.col("source.SUBDIVISION") != F.col("target.SUBDIVISION"), F.lit("SUBDIVISION")).otherwise(F.lit(None))
+
+# Aggregate mismatch results
+mismatch_df = comparison_df.withColumn(
+    "mismatch_columns",
+    F.array(
+        F.when(mismatch_domain.isNotNull(), mismatch_domain),
+        F.when(mismatch_division.isNotNull(), mismatch_division),
+        F.when(mismatch_subdivision.isNotNull(), mismatch_subdivision)
+    )
+)
+
