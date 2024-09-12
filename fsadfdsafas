@@ -1,1 +1,13 @@
-
+transform_df = transform_df.filter(
+    (F.col('documentOs.documentOsGuid').isNotNull()) &
+    (F.col('documentOs.documentOsName').isNotNull()) &
+    (F.col('tuple').isNotNull()) &
+    (F.col('storage.documentStoreType').isNotNull()) &
+    (F.col('storage.documentStoreUrl').isNotNull()) &
+    (F.size(F.col('bankDocument.tenants')) > 0) &  # Ensure tenants array has at least one object
+    (F.col('bankDocument.tenants.domain').isNotNull()) &
+    (F.col('bankDocument.tenants.division').isNotNull()) &
+    (F.col('bankDocument.tenants.recordsManagement').isNotNull()) &  # Ensure recordsManagement is an object
+    (F.col('bankDocument.tenants.recordsManagement.recordCode').isNotNull()) &
+    (F.col('bankDocument.tenants.recordsManagement.jurisdiction').isNotNull())
+)
