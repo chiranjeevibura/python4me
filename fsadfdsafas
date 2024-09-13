@@ -11,18 +11,3 @@ transform_df = transform_df.filter(
     (F.col('bankDocument.tenants.recordsManagement.recordCode').isNotNull()) &
     (F.col('bankDocument.tenants.recordsManagement.jurisdiction').isNotNull())
 )
-
-
-Subject: Request for Temporary Work-from-Home or Leave Due to Injury
-
-
-
-I hope you're doing well. I’m writing to inform you of an unfortunate injury I sustained during the pickleball league. While trying to avoid an out-ball, I took an awkward fall, landing with my full weight on my left palm. This has caused significant pain, swelling, and bruising, making it difficult for me to use my left hand at all.
-
-At the moment, I’m unable to drive or manage daily tasks with one hand, and this has made commuting to the office and working effectively quite challenging. While I haven’t consulted a doctor yet, I’m monitoring the situation closely and hope that the swelling will subside naturally in the coming days. However, given the current state of my injury, I anticipate needing 3 to 4 weeks to recover fully.
-
-During this time, I would like to request an exemption from coming to the office. If possible, I can work from home during my recovery. Should the pain persist beyond a reasonable time, I may need to consult a doctor, but I will keep you informed of my condition and progress. As soon as I’m able to use my hand comfortably again, I will be eager to return to the office.
-
-Thank you for your understanding and support during this time. Please let me know if you need any additional information or if there are any steps I need to follow to formalize this request.
-
-Warm regards,
