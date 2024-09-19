@@ -1,0 +1,173 @@
+To effectively monitor and troubleshoot issues during migrations in your Apache Spark environment using Splunk, you should configure logging to capture a wide range of operational and job-specific details from both the server (infrastructure) and job (application) perspectives. Below are the different types of logs that you should configure in Splunk for complete monitoring and troubleshooting coverage:
+
+### 1. **Spark Application Logs (Driver and Executor Logs)**
+These logs are essential for understanding the execution flow of Spark applications, including job scheduling, task execution, and error reporting.
+
+- **Driver Logs**: The driver logs contain information about the lifecycle of the Spark job, including job submission, DAG creation, scheduling, and task distribution.
+  - Log File Location (default): `${SPARK_HOME}/logs/`
+  - Key Information:
+    - Application start/stop time.
+    - Task and job scheduling information.
+    - Error and exception traces.
+    - Resource allocation issues (e.g., insufficient memory, failed executors).
+  
+- **Executor Logs**: Executor logs capture the details of task execution on individual executors, including errors and resource utilization.
+  - Log File Location: Logs are usually stored in the executor’s working directory (driver node), such as `/var/log/spark/executor/`.
+  - Key Information:
+    - Task failures and retries.
+    - OutOfMemoryErrors, network issues, or disk I/O issues.
+    - Shuffle read/write performance and errors.
+  
+  **Splunk Configuration**: Ingest both driver and executor logs using a forwarder from the log directory to Splunk.
+
+### 2. **YARN/Mesos/Standalone Cluster Manager Logs (If Applicable)**
+If you're running Spark on YARN, Mesos, or Spark's Standalone cluster manager, their logs are crucial for understanding resource allocation issues.
+
+- **YARN ResourceManager and NodeManager Logs**:
+  - Location: `${HADOOP_HOME}/logs/` for ResourceManager and NodeManager logs.
+  - Key Information:
+    - Job resource allocation (container assignments).
+    - Container failures and retries.
+    - Cluster resource availability and bottlenecks.
+  
+- **Standalone Cluster Master and Worker Logs**:
+  - Location: `${SPARK_HOME}/logs/` (for standalone cluster mode).
+  - Key Information:
+    - Worker registration with the master.
+    - Executor allocation and deallocation events.
+    - Master failover and recovery in case of high availability setups.
+
+  **Splunk Configuration**: Set up Splunk forwarders to ingest YARN, Mesos, or Standalone logs as applicable.
+
+### 3. **Batch Job-Specific Logs**
+You have 3 specific Spark jobs (batch creation, record migration, reconciliation), so logs for each job need to be explicitly monitored.
+
+- **Batch Creation Job Logs**:
+  - Logs should capture:
+    - Batch creation start and completion times.
+    - Batches created (with BatchID, batch size, FromDate, and ToDate).
+    - Any errors during batch creation.
+  - Key fields to monitor in Splunk:
+    - `BatchID`
+    - `Batch creation time`
+    - `FromDate`, `ToDate`
+
+- **Migration Job Logs**:
+  - Logs should capture:
+    - Migration start and end times.
+    - Document count migrated successfully for each batch.
+    - Errors (e.g., document ingestion failures, network timeouts).
+    - Retry logic if a document fails to migrate.
+  - Key fields to monitor in Splunk:
+    - `BatchID`
+    - `Documents Migrated`
+    - `Failed Documents`
+    - `Migration Duration`
+  
+- **Reconciliation Job Logs**:
+  - Logs should capture:
+    - Validation start and completion times.
+    - Data reconciliation between source and target (record counts, sample checks).
+    - Errors in data validation.
+  - Key fields to monitor in Splunk:
+    - `BatchID`
+    - `Source Record Count`
+    - `Target Record Count`
+    - `Reconciliation Pass/Fail`
+  
+  **Splunk Configuration**: Forward all job-specific logs (created through custom logging in your Spark application) to Splunk. Ensure that the logging format includes fields like `BatchID`, `Job Name`, and `Timestamp` to simplify searching and troubleshooting in Splunk.
+
+### 4. **GC (Garbage Collection) Logs**
+GC logs help in identifying memory-related issues such as long garbage collection times, frequent full GCs, or out-of-memory errors.
+
+- **GC Log Configuration**: In your `spark-submit` command or Spark configuration, enable detailed GC logging:
+  ```bash
+  --conf "spark.executor.extraJavaOptions=-XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -Xloggc:/path/to/gc.log"
+  ```
+  - Key Information:
+    - GC pause times.
+    - Memory leaks or high memory usage patterns.
+  
+  **Splunk Configuration**: Forward these logs to Splunk to monitor memory pressure on executors.
+
+### 5. **Spark Event Logs**
+Spark Event Logs capture information about the Spark jobs, stages, and tasks at a fine-grained level. These logs are useful for detailed troubleshooting and performance tuning.
+
+- **Event Log Location**: Set `spark.eventLog.dir` in Spark's configuration:
+  ```bash
+  --conf spark.eventLog.enabled=true
+  --conf spark.eventLog.dir=hdfs:///path/to/event/logs  # Can also be a local or S3 path
+  ```
+  - Key Information:
+    - Task-level metrics (execution time, shuffle read/write).
+    - Failed stages, tasks, or jobs.
+    - Resource usage per task.
+  
+  **Splunk Configuration**: Forward these logs to Splunk for granular insight into the execution of individual Spark tasks and stages.
+
+### 6. **Application Master Logs (if using YARN)**
+If you’re running Spark on YARN, the Application Master logs are important for tracking job submission and the overall health of your Spark jobs.
+
+- **Log Location**: Accessed through YARN’s ResourceManager Web UI or under `${HADOOP_HOME}/logs/`.
+- Key Information:
+  - Job submission status.
+  - Application failures.
+  - Resource allocation and deallocation.
+  
+  **Splunk Configuration**: Forward YARN application master logs into Splunk for centralized monitoring.
+
+### 7. **Spark Metrics**
+Enable Spark’s built-in metrics system to collect and forward runtime metrics to Splunk for real-time monitoring and alerting. Spark metrics cover various resource consumption data, including CPU, memory, and I/O.
+
+- **Metrics to Enable**:
+  - Executor metrics (CPU utilization, memory usage).
+  - Task metrics (task run time, shuffle I/O).
+  - JVM metrics (GC time, heap usage).
+  
+  **Configuration**: Use the Spark metrics.properties file to configure a sink (e.g., JMX, Ganglia) to send metrics data to Splunk.
+  
+  Example:
+  ```properties
+  *.sink.splunk.class=org.apache.spark.metrics.sink.SplunkSink
+  ```
+
+  **Splunk Configuration**: Forward these metrics to Splunk for performance monitoring dashboards.
+
+### 8. **Infrastructure Logs (OS/Server Logs)**
+Since your Spark jobs depend on the underlying server resources, monitor server logs for resource usage, disk I/O, and network issues.
+
+- **System Logs**: Collect logs from `/var/log/` (e.g., `/var/log/syslog`, `/var/log/messages`).
+- **Disk and Network Metrics**: Collect data on disk I/O performance, network errors, and overall server health.
+
+  **Splunk Configuration**: Set up a forwarder to ingest infrastructure logs for the servers where Spark is running.
+
+### 9. **Audit and Security Logs**
+Monitor security logs for access to your Spark cluster (e.g., SSH access logs, login attempts, permission changes) to ensure that there is no unauthorized access during the migration process.
+
+- **SSH Logs**: `/var/log/auth.log` or `/var/log/secure`.
+- **Firewall Logs**: Logs showing network activity and blocked requests.
+
+  **Splunk Configuration**: Collect and analyze these logs for security monitoring during the migration process.
+
+---
+
+### Sample Splunk Dashboard for Monitoring Spark Migration Jobs
+Once all these logs are ingested, you can create a Splunk dashboard to monitor your migration process in real-time. Some key metrics and visualizations you can include:
+
+- **Batch Migration Progress**:
+  - Total documents migrated per batch.
+  - Error rates (failed documents, retry attempts).
+  
+- **Reconciliation Status**:
+  - Reconciliation pass/fail per batch.
+  - Source vs. target record counts for each batch.
+
+- **Resource Utilization**:
+  - Executor memory usage and CPU utilization.
+  - GC times and frequency.
+  
+- **Infrastructure Health**:
+  - Server CPU and memory usage.
+  - Disk I/O and network traffic.
+
+By configuring these logs and setting up the appropriate alerts and dashboards in Splunk, you'll have a robust monitoring system that allows you to troubleshoot issues in your Apache Spark environment during the migration process.
