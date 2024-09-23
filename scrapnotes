@@ -1,19 +1,2 @@
-Subject: Enhancing CDL Support with a New Validation Tool
-
-Dear [Architect's Name],
-
-I hope this email finds you well.
-
-I'm reaching out to discuss the possibility of scheduling a meeting to explore a new validation tool concept that could significantly improve our team's efficiency and streamline CDL platform support, particularly post-November release.
-
-In the past, we successfully developed eValidator, a centralized platform for validating various P8 infrastructure components. Building on this experience, I've been working on a similar tool, CDLValidator, with the aim of providing a comprehensive validation solution specifically tailored to the CDL platform.
-
-I'd like to share my initial ideas for CDLValidator and gather your valuable insights. By combining our expertise, we can create a tool that not only benefits our internal team but also empowers the production support team to troubleshoot and maintain the CDL platform more effectively.
-
-I'm available to meet at your earliest convenience. Please let me know if you're interested in discussing this further.
-
-Thank you for your time and consideration.
-
-Sincerely,
-[Your Name]
-[Your Position]
+If businessDocumentStatus is "WIP", the resulting schema will include wipExpirationDate with the value set to current_date + 540 days.
+If businessDocumentStatus is not "WIP", the resulting schema will not contain the wipExpirationDate field at all (it is excluded).
