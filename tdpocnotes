@@ -1,0 +1,127 @@
+Given the size of the data in both Oracle (17 million records) and Teradata (with multiple tables having hundreds of millions of records), we need to approach this problem with careful attention to performance, scalability, and efficient data movement. Here’s a high-level architectural approach and a working solution using PySpark that’s designed to handle large volumes of data without performance bottlenecks.
+
+Architecture and Strategy
+Minimize Data Movement: Instead of transferring large volumes of data between Teradata and Oracle, only the necessary data should be transferred. This means filtering at the source database before transferring the data to Spark.
+
+Partitioning and Parallel Processing: Leverage Spark's ability to partition data and distribute processing across the cluster to handle large datasets efficiently.
+
+Incremental or Batch Processing: To avoid handling too much data at once, we can process the records in batches, especially from the larger tables (e.g., the 230M records in VCARD_CNS_US.APP_CUST_REF_ID).
+
+Efficient Filtering with Broadcast Joins: If the Oracle table (17M records) is significantly smaller than the Teradata tables, use Spark's broadcast join to filter large datasets with smaller ones efficiently.
+
+Partitioning on Teradata: Ensure that Teradata is queried using proper partitions (e.g., based on APP_REF_NO or PROD_ACCT_NO) to avoid full table scans and reduce I/O costs.
+
+Steps
+1. Load Data from Oracle (Assuming it's comparatively smaller)
+We will first load 1 million records from the Oracle table.
+
+python
+Copy code
+from pyspark.sql import SparkSession
+
+# Initialize Spark Session
+spark = SparkSession.builder \
+    .appName("Teradata_Oracle_Integration") \
+    .config("spark.jars", "/path_to_jdbc_driver/terajdbc4.jar,/path_to_jdbc_driver/tdgssconfig.jar,/path_to_jdbc_driver/ojdbc8.jar") \
+    .getOrCreate()
+
+# Oracle JDBC connection details
+oracle_jdbc_url = "jdbc:oracle:thin:@<oracle_host>:<port>/<service_name>"
+oracle_properties = {
+    "user": "<username>",
+    "password": "<password>",
+    "driver": "oracle.jdbc.driver.OracleDriver"
+}
+
+# Load 1 million records from Oracle table
+oracle_query = "(SELECT APP_REF_NO, PROD_ACCT_NO, PROD_CD FROM CE2OS1.ECMI_BUCKYE_TEMP WHERE ROWNUM <= 1000000) AS t"
+oracle_df = spark.read.jdbc(oracle_jdbc_url, oracle_query, properties=oracle_properties)
+oracle_df.cache()  # Cache since we'll reuse it multiple times
+2. Filter and Broadcast Small Oracle Data
+We'll split the Oracle data into two categories: Consumer (PROD_CD == 'CC') and Small Business (PROD_CD == 'SB'), and broadcast these datasets for efficient filtering on Teradata.
+
+python
+Copy code
+# Filter Consumer and Small Business records from Oracle data
+consumer_df = oracle_df.filter(oracle_df.PROD_CD == 'CC')
+sb_df = oracle_df.filter(oracle_df.PROD_CD == 'SB')
+
+# Broadcast smaller DataFrames for performance
+consumer_broadcast = spark.sparkContext.broadcast(consumer_df.collect())
+sb_broadcast = spark.sparkContext.broadcast(sb_df.collect())
+3. Load Data from Teradata Using Partitioning
+We'll partition the large Teradata tables to optimize parallel processing. For example, partition by a numeric column like APP_REF_NO or PROD_ACCT_NO.
+
+python
+Copy code
+# Teradata JDBC connection details
+teradata_jdbc_url = "jdbc:teradata://<teradata_host>"
+teradata_properties = {
+    "user": "<username>",
+    "password": "<password>"
+}
+
+# Load VCARD_CNS_US.APP_CUST_REF_ID table with partitioning (230M records)
+app_cust_ref_df = spark.read.jdbc(teradata_jdbc_url, "VCARD_CNS_US.APP_CUST_REF_ID", properties=teradata_properties, 
+                                  column="APP_REF_NO", lowerBound=1, upperBound=230000000, numPartitions=50)
+
+# Load VCARD_CNS_US.ACCT_MED_CHG table (78M records) - use partitioning if needed
+acct_med_chg_df = spark.read.jdbc(teradata_jdbc_url, "VCARD_CNS_US.ACCT_MED_CHG", properties=teradata_properties,
+                                  column="PROD_ACCT_NO", lowerBound=1, upperBound=78000000, numPartitions=50)
+
+# Load VCARD_SMB_NA.ACCT_STAT_CT table (23M records)
+acct_stat_ct_df = spark.read.jdbc(teradata_jdbc_url, "VCARD_SMB_NA.ACCT_STAT_CT", properties=teradata_properties,
+                                  column="ACCT_ID", lowerBound=1, upperBound=23000000, numPartitions=20)
+4. Filter Large Teradata Tables Based on Broadcasted Oracle Data
+We will use consumer_broadcast and sb_broadcast to filter the large Teradata tables efficiently.
+
+4.1 Consumer Data Processing (From ACCT_MED_CHG Table)
+Filter the large Teradata ACCT_MED_CHG table based on PROD_ACCT_NO from Oracle’s consumer data.
+
+python
+Copy code
+from pyspark.sql import functions as F
+
+# Extract the list of consumer PROD_ACCT_NO from the broadcast data
+consumer_acct_no_list = [row['PROD_ACCT_NO'] for row in consumer_broadcast.value]
+
+# Filter the ACCT_MED_CHG table based on the consumer account numbers
+consumer_filtered_df = acct_med_chg_df.filter(acct_med_chg_df.PROD_ACCT_NO.isin(consumer_acct_no_list))
+
+# Select the required columns
+consumer_results_df = consumer_filtered_df.select("PROD_ACCT_NO", "STATC_CLOSED_MAINT_DT")
+4.2 Small Business Data Processing (From ACCT_STAT_CT Table)
+Similarly, filter the ACCT_STAT_CT table based on small business account numbers, but ensure CUR_BL_AM is zero.
+
+python
+Copy code
+# Extract the list of small business PROD_ACCT_NO from the broadcast data
+sb_acct_no_list = [row['PROD_ACCT_NO'] for row in sb_broadcast.value]
+
+# Filter the ACCT_STAT_CT table based on the small business account numbers and CUR_BL_AM is zero
+sb_filtered_df = acct_stat_ct_df.filter((acct_stat_ct_df.ACCT_ID.isin(sb_acct_no_list)) & (acct_stat_ct_df.CUR_BL_AM == 0))
+
+# Select the required columns
+sb_results_df = sb_filtered_df.select("ACCT_ID", "CLS_DT")
+5. Save Results
+Finally, save or export the results to a destination, such as a new database, file, or directly write them to Oracle.
+
+python
+Copy code
+# Save results to an output destination, for example, a CSV or a table
+consumer_results_df.write.format("csv").save("/path_to_output/consumer_results")
+sb_results_df.write.format("csv").save("/path_to_output/sb_results")
+
+# Alternatively, you could write the results to another Oracle or Teradata table
+consumer_results_df.write.jdbc(oracle_jdbc_url, "consumer_results_table", mode="overwrite", properties=oracle_properties)
+sb_results_df.write.jdbc(oracle_jdbc_url, "sb_results_table", mode="overwrite", properties=oracle_properties)
+Key Considerations:
+Data Partitioning: Partitioning the Teradata tables ensures that Spark reads and processes the data in parallel, improving performance for large datasets.
+
+Broadcast Joins: By broadcasting the smaller datasets (from Oracle), we minimize data shuffling and optimize filtering on the larger Teradata tables.
+
+Batch Processing: Consider processing data in batches (e.g., fetching 1 million records at a time) to avoid memory or performance issues, especially with such large datasets.
+
+Caching: We cache the smaller Oracle dataset (oracle_df) to avoid reloading it multiple times during filtering, improving efficiency.
+
+This approach ensures that the processing is distributed, minimizes data movement, and leverages Spark's strengths to handle large-scale data efficiently. Let me know if you need any more detailed explanations or code snippets!
