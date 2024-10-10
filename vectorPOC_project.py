@@ -273,8 +273,8 @@ if __name__ == "__main__":
             // Clear input field
             document.getElementById('user-input').value = '';
 
-            // Send user input to the backend (Simulating a fetch request)
-            fetch('/ask', {
+            // Send user input to the backend
+            fetch('http://127.0.0.1:5000/ask', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -285,6 +285,10 @@ if __name__ == "__main__":
             .then(data => {
                 // Append the bot response to the chat
                 appendMessage('bot', data.answer);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                appendMessage('bot', 'Sorry, something went wrong.');
             });
         }
 
