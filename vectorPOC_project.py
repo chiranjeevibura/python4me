@@ -43,7 +43,7 @@ tfidf_matrix = vectorizer.fit_transform(documents)
 # Function to perform basic entity recognition
 def extract_entities(question):
     # Simple regex to find patient name, age, diagnosis, etc.
-    name_match = re.search(r'\b(name|patient)\s*is\s*(\w+)', question, re.I)
+    name_match = re.search(r'\b(name|patient)\s*(?:is|named)?\s*(\w+)', question, re.I)
     age_match = re.search(r'\b(age|old)\s*is\s*(\d+)', question, re.I)
     diagnosis_match = re.search(r'\b(diagnosis|diagnosed)\s*(with)?\s*(\w+)', question, re.I)
     
@@ -114,6 +114,7 @@ if __name__ == "__main__":
     app.run(debug=True)
 
 
+
 ***************************************************************************
 <!DOCTYPE html>
 <html lang="en">
@@ -122,188 +123,117 @@ if __name__ == "__main__":
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patient Diagnostics Chatbot</title>
     <style>
-        /* Basic styling for the webpage */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f5f5f5;
         }
 
-        .header {
-            padding: 20px;
-            text-align: center;
-            background: #007bff;
-            color: white;
-        }
-
-        .content {
-            padding: 20px;
-        }
-
-        /* Chatbot button at the bottom-right corner */
-        .chatbot-button {
+        .chat-container {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50px;
-            width: 60px;
-            height: 60px;
-            cursor: pointer;
-            font-size: 24px;
-        }
-
-        /* Chat window */
-        .chat-window {
-            display: none;
-            position: fixed;
-            bottom: 100px;
-            right: 30px;
-            width: 300px;
-            height: 400px;
+            right: 20px;
+            bottom: 20px;
+            width: 350px;
+            max-width: 100%;
             background-color: white;
-            border: 1px solid #007bff;
+            box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.2);
             border-radius: 10px;
-            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
         }
 
-        .chat-window header {
+        .chat-header {
             background-color: #007bff;
-            padding: 10px;
             color: white;
-            font-size: 18px;
+            padding: 15px;
             text-align: center;
-            border-radius: 10px 10px 0 0;
+            font-size: 18px;
+            font-weight: bold;
         }
 
-        .chat-window .messages {
-            padding: 10px;
+        .chat-messages {
+            padding: 15px;
             height: 300px;
-            overflow-y: scroll;
+            overflow-y: auto;
+            background-color: #f7f7f7;
         }
 
-        .chat-window .input-box {
+        .chat-input {
             display: flex;
-            border-top: 1px solid #ccc;
+            border-top: 1px solid #ddd;
         }
 
-        .chat-window .input-box input {
-            width: 80%;
+        .chat-input input {
+            width: 100%;
             padding: 10px;
             border: none;
             outline: none;
+            font-size: 16px;
         }
 
-        .chat-window .input-box button {
-            width: 20%;
+        .chat-input button {
+            padding: 10px 20px;
+            border: none;
             background-color: #007bff;
             color: white;
-            border: none;
+            font-size: 16px;
             cursor: pointer;
-            padding: 10px;
         }
-
-        /* Styling for messages */
-        .message {
-            margin: 5px 0;
-        }
-
-        .message.user {
-            text-align: right;
-        }
-
-        .message.bot {
-            text-align: left;
-        }
-
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>Patient Diagnostics Dashboard</h1>
-        <p>Use the chatbot to ask questions about patients' diagnostics.</p>
+<div class="chat-container">
+    <div class="chat-header">
+        Patient Diagnostics Chatbot
     </div>
-
-    <div class="content">
-        <h2>Welcome to the Patient Records Dashboard</h2>
-        <p>Here, you can interact with our intelligent chatbot to ask questions related to patient records. Click on the chat icon at the bottom-right corner to begin your interaction.</p>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="Ask a question...">
+        <button onclick="sendMessage()">Send</button>
     </div>
+</div>
 
-    <!-- Chatbot Button -->
-    <button class="chatbot-button" onclick="toggleChat()">💬</button>
+<script>
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
 
-    <!-- Chat Window -->
-    <div class="chat-window" id="chat-window">
-        <header>
-            Patient Diagnostics Chatbot
-        </header>
-        <div class="messages" id="messages"></div>
-        <div class="input-box">
-            <input type="text" id="user-input" placeholder="Ask your question..." onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()">Send</button>
-        </div>
-    </div>
+    function sendMessage() {
+        const message = chatInput.value;
+        if (message.trim() === '') return;
 
-    <script>
-        // Toggle chatbot window
-        function toggleChat() {
-            const chatWindow = document.getElementById('chat-window');
-            chatWindow.style.display = chatWindow.style.display === 'none' || chatWindow.style.display === '' ? 'block' : 'none';
-        }
+        appendMessage('You', message);
+        chatInput.value = '';
 
-        // Handle enter key press to send message
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
+        fetch('http://127.0.0.1:5000/ask', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ question: message }),
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
             }
-        }
+            return response.json();
+        })
+        .then(data => {
+            appendMessage('Bot', data.answer);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            appendMessage('Bot', 'Sorry, something went wrong.');
+        });
+    }
 
-        // Send user message to chatbot
-        function sendMessage() {
-            const userInput = document.getElementById('user-input').value;
-            if (userInput.trim() === '') return;
-
-            // Append user message to the chat
-            appendMessage('user', userInput);
-
-            // Clear input field
-            document.getElementById('user-input').value = '';
-
-            // Send user input to the backend
-            fetch('http://127.0.0.1:5000/ask', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ question: userInput })
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Append the bot response to the chat
-                appendMessage('bot', data.answer);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                appendMessage('bot', 'Sorry, something went wrong.');
-            });
-        }
-
-        // Append messages to chat window
-        function appendMessage(sender, message) {
-            const messagesDiv = document.getElementById('messages');
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message', sender);
-            messageDiv.innerText = message;
-            messagesDiv.appendChild(messageDiv);
-
-            // Scroll chat to the bottom
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-    </script>
+    function appendMessage(sender, message) {
+        const messageDiv = document.createElement('div');
+        messageDiv.textContent = `${sender}: ${message}`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+</script>
 
 </body>
 </html>
+
