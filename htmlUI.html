@@ -341,3 +341,165 @@
 
 </body>
 </html>
+
+
+
+
+-------------- V4-------------------
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask MAA Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+        }
+        #chat-container {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            width: 300px;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        #chat-log {
+            height: 300px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #user-input {
+            width: 80%;
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        #send-btn {
+            width: 15%;
+            padding: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #send-btn:hover {
+            background-color: #45a049;
+        }
+        .chat-bubble {
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-msg {
+            background-color: #dcf8c6;
+            text-align: right;
+        }
+        .response-msg {
+            background-color: #eee;
+        }
+        footer {
+            text-align: center;
+            padding: 10px 0;
+            font-size: 0.9em;
+            color: #666;
+            position: relative;
+            bottom: 0;
+            width: 100%;
+            background-color: #f1f1f1;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Data Management Platform</h1>
+</header>
+
+<div id="chat-container">
+    <div id="chat-log"></div>
+    <input type="text" id="user-input" placeholder="Ask something...">
+    <button id="send-btn">Send</button>
+</div>
+
+<footer>
+    <p>&copy; 2024 Data Management Platform. All rights reserved.</p>
+</footer>
+
+<script>
+    const chatLog = document.getElementById('chat-log');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    // Load chat history from localStorage
+    function loadChatHistory() {
+        const history = localStorage.getItem('chatHistory');
+        if (history) {
+            chatLog.innerHTML = history;
+        }
+    }
+
+    // Save chat history to localStorage
+    function saveChatHistory() {
+        localStorage.setItem('chatHistory', chatLog.innerHTML);
+    }
+
+    // Send user input and get response from server
+    sendBtn.onclick = async function() {
+        const query = userInput.value;
+        if (!query) return;
+
+        // Append user's query to the chat log
+        chatLog.innerHTML += `<div class="chat-bubble user-msg">${query}</div>`;
+        userInput.value = '';
+
+        // Send request to server
+        const response = await fetch('http://localhost:5000/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query })
+        });
+
+        const data = await response.json();
+
+        // Append server response to the chat log
+        chatLog.innerHTML += `<div class="chat-bubble response-msg">${data.response}</div>`;
+
+        // If there's a document, display its JSON in the chat log
+        if (data.document) {
+            chatLog.innerHTML += `<pre class="chat-bubble response-msg">${JSON.stringify(data.document, null, 2)}</pre>`;
+        }
+
+        // Scroll to the bottom of the chat log
+        chatLog.scrollTop = chatLog.scrollHeight;
+
+        // Save chat history
+        saveChatHistory();
+    }
+
+    // Load chat history on page load
+    window.onload = loadChatHistory;
+</script>
+
+</body>
+</html>
