@@ -1207,3 +1207,79 @@
 </body>
 </html>
 
+----------
+
+from flask import Flask, jsonify, request
+from pymongo import MongoClient
+from bson import json_util
+import uuid
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+from chatterbot import ChatBot
+from chatterbot.trainers import ChatterBotCorpusTrainer
+
+app = Flask(__name__)
+
+# MongoDB setup (replace with your credentials)
+client = MongoClient('mongodb://localhost:27017/')
+db = client['dataportal']
+collections = db['documents']  # Collection for storing documents
+
+# Initialize ChatterBot for handling casual conversations
+chatbot = ChatBot("DocumentBot")
+trainer = ChatterBotCorpusTrainer(chatbot)
+trainer.train("chatterbot.corpus.english")  # Train using ChatterBot's English corpus
+
+# Global TF-IDF vectorizer (used for document search)
+vectorizer = TfidfVectorizer()
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_input = request.json.get('query')
+
+    if not user_input:
+        return jsonify({"error": "No input provided."}), 400
+
+    # Step 1: Use ChatterBot to handle conversational queries
+    try:
+        response = chatbot.get_response(user_input)
+        if float(response.confidence) > 0.5:
+            return jsonify({"response": str(response)}), 200
+    except Exception as e:
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+    # Step 2: Handle document search with UUID and TF-IDF
+    if user_input.startswith('CDL::'):
+        try:
+            uuid_str = user_input.split('::')[1].strip()
+            doc_uuid = uuid.UUID(uuid_str)
+            bson_uuid = Binary(doc_uuid.bytes, 4)
+
+            document = collections.find_one({'_id': bson_uuid})
+
+            if document:
+                document_json = bson_to_json(document)
+                return jsonify({"response": "Yes, document found.", "document": document_json}), 200
+            else:
+                return jsonify({"response": "No, document not found."}), 200
+        except ValueError as ve:
+            return jsonify({"error": f"Invalid UUID format: {str(ve)}"}), 400
+        except Exception as e:
+            return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+    else:
+        try:
+            best_document = search_documents(user_input)
+
+            if best_document:
+                document_json = bson_to_json(best_document)
+                return jsonify({"response": "Document found using similarity search.", "document": document_json}), 200
+            else:
+                return jsonify({"response": "No matching document found."}), 200
+
+        except Exception as e:
+            return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
