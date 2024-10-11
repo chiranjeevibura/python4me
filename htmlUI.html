@@ -122,3 +122,94 @@
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+--------------
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask MAA Chat Window</title>
+    <style>
+        /* Chat window styles */
+        #chat-window {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            width: 300px;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #chat-log {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        #user-input {
+            width: 70%;
+            padding: 5px;
+        }
+        #send-btn {
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-window">
+        <div id="chat-log"></div>
+        <input type="text" id="user-input" placeholder="Type your query here...">
+        <button id="send-btn">Send</button>
+    </div>
+
+    <script>
+        document.getElementById("send-btn").onclick = async function() {
+            const userInput = document.getElementById("user-input").value;
+            const chatLog = document.getElementById("chat-log");
+
+            try {
+                const response = await fetch('http://localhost:5000/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: userInput })
+                });
+
+                const data = await response.json();
+
+                // Handle response based on the data received
+                if (response.ok) {
+                    // Check if response includes the expected fields
+                    if (data.response) {
+                        chatLog.innerHTML += `<div>${data.response}</div>`;
+                        if (data.document) {
+                            chatLog.innerHTML += `<pre>${JSON.stringify(data.document, null, 2)}</pre>`;
+                        }
+                    } else {
+                        chatLog.innerHTML += `<div>Response not recognized.</div>`;
+                    }
+                } else {
+                    chatLog.innerHTML += `<div>Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                chatLog.innerHTML += `<div>Error: ${error.message}</div>`;
+            }
+
+            // Clear input field after sending
+            document.getElementById("user-input").value = '';
+        };
+    </script>
+</body>
+</html>
