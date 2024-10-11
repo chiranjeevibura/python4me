@@ -5,14 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ask MAA Chat Window</title>
     <style>
-        /* Add your styles here */
+        /* Style for the chat window */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-end;
+            height: 100vh;
+            margin: 0;
+        }
+
+        #chat-window {
+            width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #fff;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chat-log {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+
+        #user-input {
+            flex: 1;
+            margin-right: 5px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
     <div id="chat-window">
+        <div id="chat-log"></div>
         <input type="text" id="user-input" placeholder="Type your query here...">
         <button id="send-btn">Send</button>
-        <div id="chat-log"></div>
     </div>
 
     <script>
@@ -33,11 +83,31 @@
 
                 // Handle response based on the data received
                 if (response.ok) {
-                    // Check if response includes the expected field
-                    if (data.response) {
-                        chatLog.innerHTML += `<div>${data.response}</div>`;
-                    } else {
-                        chatLog.innerHTML += `<div>Response not recognized.</div>`;
+                    // Display the initial response
+                    chatLog.innerHTML += `<div>${data.response}</div>`;
+                    
+                    // If document found, ask if they want to see metadata
+                    if (data.response.includes("document found.")) {
+                        // Create a follow-up button
+                        const followUpBtn = document.createElement("button");
+                        followUpBtn.innerText = "Yes, show metadata";
+                        followUpBtn.onclick = async function() {
+                            const metadataResponse = await fetch('http://localhost:5000/metadata', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ uid: userInput.split('::')[1].trim() })
+                            });
+
+                            const metadataData = await metadataResponse.json();
+                            if (metadataResponse.ok) {
+                                chatLog.innerHTML += `<div>Metadata: ${JSON.stringify(metadataData.metadata)}</div>`;
+                            } else {
+                                chatLog.innerHTML += `<div>Error: ${metadataData.error}</div>`;
+                            }
+                        };
+                        chatLog.appendChild(followUpBtn);
                     }
                 } else {
                     chatLog.innerHTML += `<div>Error: ${data.error}</div>`;
