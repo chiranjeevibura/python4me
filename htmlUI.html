@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ask MAA Chat Window</title>
+    <style>
+        /* Add your styles here */
+    </style>
+</head>
+<body>
+    <div id="chat-window">
+        <input type="text" id="user-input" placeholder="Type your query here...">
+        <button id="send-btn">Send</button>
+        <div id="chat-log"></div>
+    </div>
+
+    <script>
+        document.getElementById("send-btn").onclick = async function() {
+            const userInput = document.getElementById("user-input").value;
+            const chatLog = document.getElementById("chat-log");
+
+            try {
+                const response = await fetch('http://localhost:5000/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: userInput })
+                });
+
+                const data = await response.json();
+
+                // Handle response based on the data received
+                if (response.ok) {
+                    // Check if response includes the expected field
+                    if (data.response) {
+                        chatLog.innerHTML += `<div>${data.response}</div>`;
+                    } else {
+                        chatLog.innerHTML += `<div>Response not recognized.</div>`;
+                    }
+                } else {
+                    chatLog.innerHTML += `<div>Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                chatLog.innerHTML += `<div>Error: ${error.message}</div>`;
+            }
+
+            // Clear input field after sending
+            document.getElementById("user-input").value = '';
+        };
+    </script>
+</body>
+</html>
