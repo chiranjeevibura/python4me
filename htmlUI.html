@@ -926,3 +926,284 @@
 
 </body>
 </html>
+
+
+--------- V7 ----------
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Management Platform</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            padding: 10px 0;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+        }
+        #left-pane {
+            position: fixed;
+            top: 50px; /* Adjusted for the fixed header */
+            left: 0;
+            width: 200px;
+            height: calc(100vh - 50px); /* Takes full viewport height minus the header */
+            background-color: #ffffff;
+            border-right: 1px solid #ccc;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+        #left-pane ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        #left-pane li {
+            padding: 10px;
+            cursor: pointer;
+        }
+        #left-pane li:hover {
+            background-color: #f1f1f1;
+        }
+        #left-pane .submenu {
+            margin-left: 20px; /* Indentation for sub-menu items */
+        }
+        #main-content {
+            margin-left: 220px;
+            padding: 20px;
+            padding-top: 60px;
+            width: calc(100% - 220px);
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        .description {
+            text-align: center;
+            padding: 20px;
+            background-color: #fff;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .features {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        .feature-box {
+            width: 30%;
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .feature-box img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+        .feature-box h3 {
+            margin-top: 10px;
+        }
+        #chat-container {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            transition: height 0.3s ease;
+        }
+        #chat-log {
+            height: 250px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #user-input {
+            width: 80%;
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        #send-btn {
+            width: 15%;
+            padding: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #send-btn:hover {
+            background-color: #45a049;
+        }
+        .toggle-chat {
+            cursor: pointer;
+            color: #4CAF50;
+            text-align: center;
+            padding: 5px;
+            font-weight: bold;
+            border: none;
+            background: none;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Data Management Platform</h1>
+</header>
+
+<div id="left-pane">
+    <ul>
+        <li>Home</li>
+        <li>Batch Creation</li>
+        <li>Data Migration
+            <ul class="submenu">
+                <li>Historical Migration</li>
+                <li>Incremental Migration</li>
+                <li>Delta Migration</li>
+            </ul>
+        </li>
+        <li>Reconciliation</li>
+        <li>Data Correction</li>
+        <li>Data Analysis</li>
+        <li>Dashboard</li>
+    </ul>
+</div>
+
+<div id="main-content">
+    <div class="features">
+        <div class="feature-box">
+        <img src="https://uarrow.cloud/wp-content/uploads/2022/06/Data-Reconciliations.png" alt="Batch Creation">
+        <h2>Welcome to the Data Management Platform</h2>
+        <p>
+            Our Data Management Platform (DMP) provides robust and scalable solutions for managing, migrating, and analyzing large datasets. 
+            Whether you're handling data reconciliation, conducting detailed data analysis, or ensuring seamless data migrations, our platform 
+            offers tools to make the process efficient and reliable.
+        </p>
+        </div>
+    </div>
+ 
+<!--     <div class="features">
+        <div class="feature-box">
+            <img src="https://via.placeholder.com/300" alt="Batch Creation">
+            <h3>Batch Creation</h3>
+            <p>Create data batches for seamless processing and migration, ensuring data integrity and accuracy at each step.</p>
+        </div>
+        <div class="feature-box">
+            <img src="https://via.placeholder.com/300" alt="Data Migration">
+            <h3>Data Migration</h3>
+            <p>Easily migrate data across systems with our built-in tools for handling historical, incremental, and delta migrations.</p>
+        </div>
+        <div class="feature-box">
+            <img src="https://via.placeholder.com/300" alt="Reconciliation">
+            <h3>Reconciliation</h3>
+            <p>Reconcile data across various sources to ensure consistency and accuracy, even when managing millions of records.</p>
+        </div>
+    </div> -->
+
+    <div id="chat-container">
+        <button class="toggle-chat" id="toggle-btn">-</button>
+        <div id="chat-log"></div>
+        <input type="text" id="user-input" placeholder="Ask something...">
+        <button id="send-btn">Send</button>
+    </div>
+</div>
+
+<script>
+    const chatLog = document.getElementById('chat-log');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatContainer = document.getElementById('chat-container');
+    const toggleBtn = document.getElementById('toggle-btn');
+
+    // Load chat history from localStorage
+    function loadChatHistory() {
+        const history = localStorage.getItem('chatHistory');
+        if (history) {
+            chatLog.innerHTML = history;
+        }
+    }
+
+    // Save chat history to localStorage
+    function saveChatHistory() {
+        localStorage.setItem('chatHistory', chatLog.innerHTML);
+    }
+
+    // Send user input and get response from server
+    sendBtn.onclick = async function() {
+        const query = userInput.value;
+        if (!query) return;
+
+        // Append user's query to the chat log
+        chatLog.innerHTML += `<div class="chat-bubble user-msg">${query}</div>`;
+        userInput.value = '';
+
+        // Send request to server
+        const response = await fetch('http://localhost:5000/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query })
+        });
+
+        const data = await response.json();
+
+        // Append server response to the chat log
+        chatLog.innerHTML += `<div class="chat-bubble response-msg">${data.response}</div>`;
+
+        // If there's a document, display its JSON in the chat log
+        if (data.document) {
+            chatLog.innerHTML += `<pre class="chat-bubble response-msg">${JSON.stringify(data.document, null, 2)}</pre>`;
+        }
+
+        // Scroll to the bottom of the chat log
+        chatLog.scrollTop = chatLog.scrollHeight;
+
+        // Save chat history
+        saveChatHistory();
+    }
+
+    // Toggle chat window visibility
+    toggleBtn.onclick = function() {
+        if (chatContainer.style.height === "30px") {
+            chatContainer.style.height = "300px"; // Expanded height
+            chatLog.style.display = "block"; // Show chat log
+            toggleBtn.textContent = "-"; // Change to minimize icon
+        } else {
+            chatContainer.style.height = "30px"; // Minimized height
+            chatLog.style.display = "none"; // Hide chat log
+            toggleBtn.textContent = "+"; // Change to maximize icon
+        }
+    }
+
+    // Load chat history on page load
+    loadChatHistory();
+</script>
+
+</body>
+</html>
+
