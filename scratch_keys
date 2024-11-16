@@ -1,0 +1,6 @@
+[
+  { "$unwind": "$customerReferenceKeys" },
+  { "$match": { "customerReferenceKeys.name": "GCI" } },
+  { "$group": { "_id": "$_id", "gci_count": { "$sum": 1 } } },
+  { "$match": { "gci_count": 20 } }
+]
