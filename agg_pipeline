@@ -1,0 +1,39 @@
+[
+  {
+    "$match": {
+      "migrationHistory.migratedBy": { "$ne": "cdlmdbmp" },
+      "bankDocument.tenants": {
+        "$elemMatch": {
+          "domain": "ABC",
+          "division": "ABC"
+        }
+      },
+      "systemCreatedDateTime": { "$gt": ISODate("2024-11-17T00:00:00Z") }
+    }
+  },
+  {
+    "$addFields": {
+      "sixHourBucket": {
+        "$dateToString": {
+          "format": "%Y-%m-%d %H:00:00",
+          "date": {
+            "$dateTrunc": {
+              "unit": "hour",
+              "binSize": 6,
+              "date": "$systemCreatedDateTime"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "$group": {
+      "_id": "$sixHourBucket",
+      "documentCount": { "$sum": 1 }
+    }
+  },
+  {
+    "$sort": { "_id": 1 }
+  }
+]
