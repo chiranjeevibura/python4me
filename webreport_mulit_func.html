@@ -1,0 +1,180 @@
+from flask import Flask, render_template, request, jsonify
+from pymongo import MongoClient
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+
+# MongoDB connection
+client = MongoClient("mongodb://your_mongo_uri")
+db = client['your_db_name']
+collection = db['your_collection_name']
+
+# Function to fetch report data from MongoDB
+def fetch_report(origination_system, start_date, end_date, report_type):
+    filter_condition = {
+        "migrationHistory.migratedBy": {"$ne": "cdlmdbmp"},
+        "bankDocument.tenants": {
+            "$elemMatch": {
+                "domain": "ABC",
+                "division": "ABC"
+            }
+        },
+        "systemCreatedDateTime": {"$gt": start_date, "$lt": end_date}
+    }
+
+    if origination_system != "ALL":
+        filter_condition["adminDocument.originationSystemName"] = origination_system
+
+    # Determine grouping based on report type
+    if report_type == "hourly":
+        time_bucket = {"unit": "hour"}
+    elif report_type == "daily":
+        time_bucket = {"unit": "day"}
+    elif report_type == "cumulative":
+        time_bucket = {"unit": "day"}  # Similar to daily but aggregated overall
+
+    pipeline = [
+        {"$match": filter_condition},
+        {
+            "$group": {
+                "_id": {
+                    "bucket": {
+                        "$dateTrunc": {**time_bucket, "date": "$systemCreatedDateTime"}
+                    },
+                    "originationSystemName": "$adminDocument.originationSystemName"
+                },
+                "documentCount": {"$sum": 1}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$_id.bucket",
+                "overallCount": {"$sum": "$documentCount"},
+                "systemCounts": {
+                    "$push": {
+                        "originationSystemName": "$_id.originationSystemName",
+                        "count": "$documentCount"
+                    }
+                }
+            }
+        },
+        {"$sort": {"_id": 1}}
+    ]
+
+    if report_type == "cumulative":
+        cumulative_count = 0
+        results = []
+        for entry in collection.aggregate(pipeline):
+            cumulative_count += entry["overallCount"]
+            entry["cumulativeCount"] = cumulative_count
+            results.append(entry)
+        return results
+    else:
+        return list(collection.aggregate(pipeline))
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/get_report', methods=['POST'])
+def get_report():
+    data = request.json
+    origination_system = data['originationSystem']
+    start_date = datetime.strptime(data['startDate'], "%Y-%m-%dT%H:%M:%S")
+    end_date = datetime.strptime(data['endDate'], "%Y-%m-%dT%H:%M:%S")
+    report_type = data['reportType']
+    report = fetch_report(origination_system, start_date, end_date, report_type)
+    
+    return jsonify(report)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+-----------
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Count Report</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Document Count Report</h2>
+        <form id="filterForm">
+            <div class="row mb-3">
+                <div class="col">
+                    <label for="originationSystem">Origination System</label>
+                    <select class="form-control" id="originationSystem">
+                        <option value="ALL">ALL</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label for="startDate">Start Date</label>
+                    <input type="datetime-local" class="form-control" id="startDate">
+                </div>
+                <div class="col">
+                    <label for="endDate">End Date</label>
+                    <input type="datetime-local" class="form-control" id="endDate">
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col">
+                    <button type="button" class="btn btn-primary" onclick="fetchReport('hourly')">Show Hourly Report</button>
+                    <button type="button" class="btn btn-secondary" onclick="fetchReport('daily')">Show Daily Report</button>
+                    <button type="button" class="btn btn-success" onclick="fetchReport('cumulative')">Show Cumulative Report</button>
+                </div>
+            </div>
+        </form>
+
+        <div id="reportSection" class="mt-5">
+            <h3>Report</h3>
+            <table class="table" id="reportTable">
+                <thead>
+                    <tr>
+                        <th>Time Bucket</th>
+                        <th>Overall Count</th>
+                        <th>System Name</th>
+                        <th>System Count</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function fetchReport(reportType) {
+            const originationSystem = document.getElementById('originationSystem').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            fetch('/get_report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ originationSystem, startDate, endDate, reportType })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const tableBody = document.querySelector('#reportTable tbody');
+                tableBody.innerHTML = '';
+
+                data.forEach(item => {
+                    item.systemCounts.forEach(system => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item._id}</td>
+                            <td>${reportType === 'cumulative' ? item.cumulativeCount : item.overallCount}</td>
+                            <td>${system.originationSystemName}</td>
+                            <td>${system.count}</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                });
+            });
+        }
+    </script>
+</body>
+</html>
