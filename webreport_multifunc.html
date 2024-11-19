@@ -1,0 +1,191 @@
+from flask import Flask, render_template, request, jsonify
+from pymongo import MongoClient
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+
+# MongoDB connection
+client = MongoClient("mongodb://your_mongo_uri")
+db = client['your_db_name']
+collection = db['your_collection_name']
+
+# System Name Aliases
+SYSTEM_NAME_ALIASES = {
+    "ABC": "System ABC",
+    "DEF": "System DEF",
+    "GHI": "System GHI",
+    "JKL": "System JKL",
+    "MNO": "System MNO"
+}
+
+# Function to fetch report data
+def fetch_report(origination_system, start_date, end_date, report_type):
+    filter_condition = {
+        "migrationHistory.migratedBy": {"$ne": "cdlmdbmp"},
+        "bankDocument.tenants": {"$elemMatch": {"domain": "ABC", "division": "ABC"}},
+        "systemCreatedDateTime": {"$gte": start_date, "$lte": end_date}
+    }
+
+    pipeline = [
+        {"$match": filter_condition},
+        {
+            "$group": {
+                "_id": {
+                    "originationSystemName": "$adminDocument.originationSystemName",
+                    "timeBucket": {
+                        "$dateTrunc": {"unit": report_type, "date": "$systemCreatedDateTime"}
+                    }
+                },
+                "systemCount": {"$sum": 1}
+            }
+        },
+        {
+            "$group": {
+                "_id": "$_id.originationSystemName",
+                "timeBuckets": {
+                    "$push": {
+                        "timeBucket": "$_id.timeBucket",
+                        "count": "$systemCount"
+                    }
+                },
+                "overallCount": {"$sum": "$systemCount"}
+            }
+        },
+        {"$sort": {"_id": 1}}
+    ]
+
+    results = list(collection.aggregate(pipeline))
+
+    # Map system names to aliases and ensure all systems have entries
+    all_systems = set(SYSTEM_NAME_ALIASES.keys())
+    system_results = {SYSTEM_NAME_ALIASES.get(r["_id"], r["_id"]): r for r in results}
+
+    # Ensure missing systems appear with 0 counts
+    for system in all_systems:
+        if SYSTEM_NAME_ALIASES[system] not in system_results:
+            system_results[SYSTEM_NAME_ALIASES[system]] = {
+                "_id": SYSTEM_NAME_ALIASES[system],
+                "timeBuckets": [],
+                "overallCount": 0
+            }
+
+    # Ensure all time buckets appear for each system
+    for system in system_results.values():
+        time_buckets = {t["timeBucket"]: t["count"] for t in system["timeBuckets"]}
+        start = datetime.strptime(start_date, "%Y-%m-%dT%H:%M:%S")
+        end = datetime.strptime(end_date, "%Y-%m-%dT%H:%M:%S")
+        current = start
+        while current <= end:
+            bucket_key = current.strftime("%Y-%m-%dT%H:%M:%S") if report_type == "hourly" else current.strftime("%Y-%m-%d")
+            if bucket_key not in time_buckets:
+                time_buckets[bucket_key] = 0
+            current += timedelta(hours=1) if report_type == "hourly" else timedelta(days=1)
+
+        system["timeBuckets"] = [{"timeBucket": k, "count": v} for k, v in sorted(time_buckets.items())]
+
+    return list(system_results.values())
+
+@app.route('/')
+def index():
+    today = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    default_start_date = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S")
+    return render_template('index.html', default_start_date=default_start_date, default_end_date=today)
+
+@app.route('/get_report', methods=['POST'])
+def get_report():
+    data = request.json
+    origination_system = data.get('originationSystem', "ALL")
+    start_date = data.get('startDate', (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S"))
+    end_date = data.get('endDate', datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+    report_type = data['reportType']  # "hourly", "daily", "cumulative"
+    report = fetch_report(origination_system, start_date, end_date, report_type)
+    return jsonify(report)
+
+if __name__ == "__main__":
+    app.run(debug=True)
+-----------
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Origination System Report</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.8.0/chart.min.js"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <h2>Origination System Report</h2>
+        <form id="reportForm">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="startDate">Start Date</label>
+                    <input type="datetime-local" id="startDate" name="startDate" class="form-control" value="{{ default_start_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="endDate">End Date</label>
+                    <input type="datetime-local" id="endDate" name="endDate" class="form-control" value="{{ default_end_date }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="reportType">Report Type</label>
+                    <select id="reportType" name="reportType" class="form-control">
+                        <option value="hourly">Hourly</option>
+                        <option value="daily">Daily</option>
+                        <option value="cumulative">Cumulative</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button type="button" class="btn btn-primary mt-4" onclick="fetchReport()">Generate Report</button>
+                </div>
+            </div>
+        </form>
+        <div id="chartContainer" class="mt-4">
+            <canvas id="reportChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        function fetchReport() {
+            const data = {
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                reportType: document.getElementById('reportType').value
+            };
+
+            fetch('/get_report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(response => response.json())
+                .then(data => displayChart(data));
+        }
+
+        function displayChart(data) {
+            const labels = data.map(d => d._id);
+            const overallCounts = data.map(d => d.overallCount);
+
+            const chartData = {
+                labels: labels,
+                datasets: [{
+                    label: 'Overall Count',
+                    data: overallCounts,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            };
+
+            const config = {
+                type: 'bar',
+                data: chartData,
+                options: { responsive: true, plugins: { legend: { position: 'top' } } }
+            };
+
+            new Chart(document.getElementById('reportChart'), config);
+        }
+    </script>
+</body>
+</html>
