@@ -189,3 +189,123 @@ if __name__ == "__main__":
     </script>
 </body>
 </html>
+-------------
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Origination System Report</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+<div class="container mt-5">
+    <h1 class="text-center">Origination System Report</h1>
+    <form id="reportForm" class="mb-4">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label for="originationSystem" class="form-label">Origination System:</label>
+                <select id="originationSystem" class="form-select">
+                    <option value="ALL">ALL</option>
+                    <option value="System1">System1</option>
+                    <option value="System2">System2</option>
+                    <option value="System3">System3</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label for="startDate" class="form-label">Start Date:</label>
+                <input type="datetime-local" id="startDate" class="form-control" value="{{ default_start_date }}">
+            </div>
+            <div class="col-md-4">
+                <label for="endDate" class="form-label">End Date:</label>
+                <input type="datetime-local" id="endDate" class="form-control" value="{{ default_end_date }}">
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label for="reportType" class="form-label">Report Type:</label>
+                <select id="reportType" class="form-select">
+                    <option value="hour">Hourly</option>
+                    <option value="day">Daily</option>
+                    <option value="cumulative">Cumulative</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">Generate Report</button>
+    </form>
+
+    <div id="reportResult">
+        <h3 class="text-center">Report Results</h3>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Origination System</th>
+                    <th>Time Bucket</th>
+                    <th>Count</th>
+                </tr>
+            </thead>
+            <tbody id="reportTableBody">
+                <!-- Report data will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+        $('#reportResult').hide();
+
+        $('#reportForm').on('submit', function (event) {
+            event.preventDefault();
+
+            const originationSystem = $('#originationSystem').val();
+            const startDate = $('#startDate').val();
+            const endDate = $('#endDate').val();
+            const reportType = $('#reportType').val();
+
+            $.ajax({
+                url: "/get_report",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({
+                    originationSystem: originationSystem,
+                    startDate: startDate,
+                    endDate: endDate,
+                    reportType: reportType
+                }),
+                success: function (data) {
+                    $('#reportTableBody').empty();
+                    if (data.length > 0) {
+                        data.forEach(system => {
+                            system.timeBuckets.forEach(bucket => {
+                                $('#reportTableBody').append(`
+                                    <tr>
+                                        <td>${system._id}</td>
+                                        <td>${bucket.timeBucket}</td>
+                                        <td>${bucket.count}</td>
+                                    </tr>
+                                `);
+                            });
+                        });
+                        $('#reportResult').show();
+                    } else {
+                        $('#reportTableBody').append('<tr><td colspan="3" class="text-center">No Data Available</td></tr>');
+                        $('#reportResult').show();
+                    }
+                },
+                error: function () {
+                    alert('Failed to fetch the report. Please try again.');
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>
