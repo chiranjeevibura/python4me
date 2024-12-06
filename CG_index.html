@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Content Growth Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Content Growth Analysis</h1>
+    <label for="environment">Environment:</label>
+    <select id="environment">
+        <option value="CDL">CDL</option>
+    </select>
+    <label for="start-date">Start Date:</label>
+    <input type="date" id="start-date">
+    <label for="end-date">End Date:</label>
+    <input type="date" id="end-date">
+    <button onclick="fetchContentGrowth()">Show Content Growth</button>
+    <button onclick="fetchRecommendations()">Get Recommendations</button>
+    <canvas id="growthChart"></canvas>
+    <canvas id="recommendationChart"></canvas>
+    <script>
+        function fetchContentGrowth() {
+            fetch('/content-growth')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('growthChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.map(d => d.Date),
+                            datasets: [{
+                                label: 'Daily Growth (GB)',
+                                data: data.map(d => d.DailyGrowth_GB)
+                            }]
+                        }
+                    });
+                });
+        }
+        function fetchRecommendations() {
+            fetch('/recommendations')
+                .then(res => res.json())
+                .then(data => {
+                    const ctx = document.getElementById('recommendationChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.Date),
+                            datasets: [{
+                                label: 'Predicted Growth (GB)',
+                                data: data.map(d => d.prediction)
+                            }]
+                        }
+                    });
+                });
+        }
+    </script>
+</body>
+</html>
+
+
+-----
+
+
+from flask import Flask, render_template, jsonify
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, sum, to_date
+from pyspark.ml.regression import LinearRegression
+from pyspark.ml.feature import VectorAssembler
+from pymongo import MongoClient
+import pandas as pd
+import os
+
+app = Flask(__name__, template_folder='templates', static_folder='static')
+
+# MongoDB Configuration
+mongo_uri = "mongodb://localhost:27017/"
+mongo_db = "CDL"
+mongo_collection = "BankDocument"
+
+# Spark Session
+spark = SparkSession.builder \
+    .appName("ContentGrowthAnalysis") \
+    .config("spark.executor.memory", "2g") \
+    .getOrCreate()
+
+# Paths for data storage
+data_dir = os.path.join(os.path.dirname(__file__), "data")
+daily_growth_path = os.path.join(data_dir, "daily_growth.json")
+predictions_path = os.path.join(data_dir, "predictions.json")
+
+# Fetch Data from MongoDB
+def fetch_mongo_data(start_date, end_date):
+    client = MongoClient(mongo_uri)
+    db = client[mongo_db]
+    collection = db[mongo_collection]
+
+    query = {"systemCreatedDateTime": {"$gte": start_date, "$lte": end_date}}
+    projection = {"systemCreatedDateTime": 1, "contentSize": 1, "_id": 0}
+    data = list(collection.find(query, projection))
+    client.close()
+    return spark.createDataFrame(data)
+
+# Analyze Content Growth
+def analyze_content_growth():
+    start_date = "2023-01-01"
+    end_date = "2023-12-31"
+    data_df = fetch_mongo_data(start_date, end_date)
+
+    data_df = data_df.withColumn("Date", to_date(col("systemCreatedDateTime"))) \
+                     .withColumn("ContentSize_GB", col("contentSize") / (1024 * 1024 * 1024))
+
+    daily_growth_df = data_df.groupBy("Date") \
+        .agg(sum("ContentSize_GB").alias("DailyGrowth_GB"))
+
+    daily_growth_df.toPandas().to_json(daily_growth_path, orient="records")
+    return daily_growth_df
+
+# Predict Future Growth
+def predict_growth(daily_growth_df):
+    assembler = VectorAssembler(inputCols=["Date"], outputCol="features")
+    feature_df = assembler.transform(
+        daily_growth_df.withColumn("Date", col("Date").cast("long"))
+    ).select("features", "DailyGrowth_GB")
+
+    lr = LinearRegression(featuresCol="features", labelCol="DailyGrowth_GB")
+    lr_model = lr.fit(feature_df)
+
+    future_dates = pd.date_range(start="2024-01-01", periods=30).astype(int) // 10**9
+    future_df = spark.createDataFrame([(date,) for date in future_dates], ["Date"])
+    future_features = assembler.transform(
+        future_df.withColumn("Date", col("Date").cast("long"))
+    ).select("features")
+
+    predictions = lr_model.transform(future_features)
+    predictions.toPandas().to_json(predictions_path, orient="records")
+
+@app.route('/')
+def index():
+    return render_template("index.html")
+
+@app.route('/content-growth', methods=["GET"])
+def content_growth():
+    with open(daily_growth_path) as f:
+        return jsonify(json.load(f))
+
+@app.route('/recommendations', methods=["GET"])
+def recommendations():
+    with open(predictions_path) as f:
+        return jsonify(json.load(f))
+
+if __name__ == "__main__":
+    daily_growth_df = analyze_content_growth()
+    predict_growth(daily_growth_df)
+    app.run(host="0.0.0.0", port=5000)
