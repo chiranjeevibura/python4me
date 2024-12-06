@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Content Growth Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Content Growth Analysis</h1>
+    <button onclick="fetchContentGrowth()">Show Content Growth</button>
+    <button onclick="fetchRecommendations()">Get Recommendations</button>
+    <canvas id="growthChart"></canvas>
+    <canvas id="recommendationChart"></canvas>
+    <script>
+        function fetchContentGrowth() {
+            fetch('/content-growth')
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('growthChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.map(d => d.Date),
+                            datasets: [{
+                                label: 'Content Growth (GB)',
+                                data: data.map(d => d.ContentSize_GB),
+                                borderColor: 'blue',
+                                fill: false
+                            }]
+                        }
+                    });
+                });
+        }
+
+        function fetchRecommendations() {
+            fetch('/recommendations')
+                .then(response => response.json())
+                .then(data => {
+                    const ctx = document.getElementById('recommendationChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.map(d => d.Date),
+                            datasets: [{
+                                label: 'Predicted Growth (GB)',
+                                data: data.map(d => d.Predicted_GB),
+                                backgroundColor: 'green'
+                            }]
+                        }
+                    });
+                });
+        }
+    </script>
+</body>
+</html>
+
+
+from flask import Flask, jsonify, render_template
+from pymongo import MongoClient
+from datetime import datetime, timedelta
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+app = Flask(__name__, template_folder='templates')
+
+# MongoDB Configuration
+mongo_uri = "mongodb://localhost:27017/"
+mongo_db = "CDL"
+mongo_collection = "BankDocument"
+
+# Fetch Data from MongoDB
+def fetch_mongo_data(start_date, end_date):
+    client = MongoClient(mongo_uri)
+    db = client[mongo_db]
+    collection = db[mongo_collection]
+
+    # Convert string dates to datetime objects
+    start_date_utc = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date_utc = datetime.strptime(end_date, "%Y-%m-%d")
+
+    # Query MongoDB
+    query = {"systemCreatedDateTime": {"$gte": start_date_utc, "$lte": end_date_utc}}
+    projection = {"systemCreatedDateTime": 1, "contentSize": 1}
+    data = list(collection.find(query, projection))
+    client.close()
+
+    # Convert to Pandas DataFrame
+    if data:
+        df = pd.DataFrame(data)
+        df['systemCreatedDateTime'] = pd.to_datetime(df['systemCreatedDateTime'])
+        return df
+    else:
+        return pd.DataFrame(columns=['systemCreatedDateTime', 'contentSize'])
+
+# Analyze Content Growth
+def analyze_content_growth(start_date, end_date):
+    df = fetch_mongo_data(start_date, end_date)
+
+    if df.empty:
+        return {"error": "No data found for the given date range."}
+
+    # Aggregate content size growth by day
+    df['Date'] = df['systemCreatedDateTime'].dt.date
+    daily_growth = df.groupby('Date')['contentSize'].sum().reset_index()
+    daily_growth['ContentSize_GB'] = daily_growth['contentSize'] / (1024 * 1024 * 1024)
+    return daily_growth
+
+# Predict Future Growth
+def predict_growth(daily_growth):
+    if daily_growth.empty:
+        return {"error": "No data available for prediction."}
+
+    # Prepare data for regression
+    daily_growth['Days'] = (daily_growth['Date'] - daily_growth['Date'].min()).dt.days
+    X = daily_growth[['Days']].values
+    y = daily_growth['ContentSize_GB'].values
+
+    # Train linear regression model
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Predict for the next 30 days
+    future_days = np.arange(daily_growth['Days'].max() + 1, daily_growth['Days'].max() + 31).reshape(-1, 1)
+    predictions = model.predict(future_days)
+    future_dates = [daily_growth['Date'].max() + timedelta(days=int(day[0])) for day in future_days]
+
+    # Create prediction DataFrame
+    prediction_df = pd.DataFrame({"Date": future_dates, "Predicted_GB": predictions})
+    return prediction_df
+
+@app.route('/')
+def index():
+    return render_template("index.html")
+
+@app.route('/content-growth')
+def content_growth():
+    start_date = "2023-01-01"
+    end_date = "2023-12-31"
+    daily_growth = analyze_content_growth(start_date, end_date)
+    return daily_growth.to_json(orient='records')
+
+@app.route('/recommendations')
+def recommendations():
+    start_date = "2023-01-01"
+    end_date = "2023-12-31"
+    daily_growth = analyze_content_growth(start_date, end_date)
+    prediction_df = predict_growth(daily_growth)
+    return prediction_df.to_json(orient='records')
+
+if __name__ == "__main__":
+    app.run(debug=True)
